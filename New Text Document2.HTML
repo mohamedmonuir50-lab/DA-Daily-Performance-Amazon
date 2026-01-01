@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DA Performance Dashboard</title>
+
+<style>
+body{font-family:Arial;background:#f2f4f7;padding:20px}
+h2{color:#0a58ca}
+table{width:100%;border-collapse:collapse;margin-top:15px}
+th,td{border:1px solid #ccc;padding:6px;text-align:center}
+th{background:#0a58ca;color:#fff}
+input{width:100%;text-align:center;box-sizing:border-box}
+button{padding:8px 14px;margin:5px;cursor:pointer}
+.low{background:#f8d7da}
+.mid{background:#fff3cd}
+.high{background:#d1e7dd}
+</style>
+</head>
+
+<body>
+
+<h2>DA Daily Performance – Amazon</h2>
+
+Date:
+<input type="date" id="dateInput">
+
+<br><br>
+
+<input type="file" id="fileInput" accept=".xlsx,.csv">
+<br><br>
+
+<button onclick="importExcel()">Import Excel</button>
+<button onclick="saveDay()">Save Day</button>
+<button onclick="loadDay()">Load Day</button>
+<button onclick="resetDay()">Reset Day</button>
+<button onclick="exportExcel()">Export Excel</button>
+
+<table id="tbl">
+<thead>
+<tr>
+<th>DA Name</th>
+<th>Total OFD</th>
+<th>Delivered</th>
+<th>OOR</th>
+<th>Undeliverable</th>
+<th>Rejected</th>
+<th>Delivery %</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+function importExcel(){
+ const f=fileInput.files[0];
+ if(!f) return alert("Select Excel file");
+ const r=new FileReader();
+ r.onload=e=>{
+  const wb=XLSX.read(e.target.result,{type:'binary'});
+  const data=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:0});
+  const tb=document.querySelector("tbody");
+  tb.innerHTML="";
+  data.forEach(d=>{
+   if(!d["DA Name"])return;
+   addRow(
+    d["DA Name"],
+    d["Total OFD"],
+    d["Delivered"],
+    d["OOR"],
+    d["Undeliverable"],
+    d["Rejected"]
+   );
+  });
+  sortTable();
+ };
+ r.readAsBinaryString(f);
+}
+
+function addRow(n,o,d,oor,u,rj){
+ const tb=document.querySelector("tbody");
+ const r=tb.insertRow();
+ r.insertCell(0).innerHTML=`<input value="${n}">`;
+ r.insertCell(1).innerHTML=`<input type=number value="${o}" oninput="recalc(this)">`;
+ r.insertCell(2).innerHTML=`<input type=number value="${d}" oninput="recalc(this)">`;
+ r.insertCell(3).innerHTML=`<input type=number value="${oor}">`;
+ r.insertCell(4).innerHTML=`<input type=number value="${u}">`;
+ r.insertCell(5).innerHTML=`<input type=number value="${rj}">`;
+ r.insertCell(6).innerText=calc(o,d);
+ colorRow(r);
+}
+
+function calc(o,d){
+ return o?((d/o)*100).toFixed(2):"0.00";
+}
+
+function recalc(el){
+ const r=el.parentElement.parentElement;
+ const o=+r.cells[1].children[0].value||0;
+ const d=+r.cells[2].children[0].value||0;
+ r.cells[6].innerText=calc(o,d);
+ colorRow(r);
+ sortTable();
+}
+
+function colorRow(r){
+ const p=parseFloat(r.cells[6].innerText);
+ r.className=p<90?"low":p<95?"mid":"high";
+}
+
+function sortTable(){
+ const tb=document.querySelector("tbody");
+ [...tb.rows]
+ .sort((a,b)=>parseFloat(a.cells[6].innerText)-parseFloat(b.cells[6].innerText))
+ .forEach(r=>tb.appendChild(r));
+}
+
+function saveDay(){
+ const d=dateInput.value;
+ if(!d)return alert("Select date first");
+ const rows=[...document.querySelectorAll("tbody tr")].map(r=>({
+  DA:r.cells[0].children[0].value,
+  OFD:r.cells[1].children[0].value,
+  Del:r.cells[2].children[0].value,
+  OOR:r.cells[3].children[0].value,
+  Und:r.cells[4].children[0].value,
+  Rej:r.cells[5].children[0].value
+ }));
+ localStorage.setItem(d,JSON.stringify(rows));
+ alert("Day Saved ✔");
+}
+
+function loadDay(){
+ const d=dateInput.value;
+ if(!d)return alert("Select date first");
+ const saved=localStorage.getItem(d);
+ if(!saved)return alert("No saved data for this day");
+ const data=JSON.parse(saved);
+ const tb=document.querySelector("tbody");
+ tb.innerHTML="";
+ data.forEach(x=>{
+  addRow(x.DA,x.OFD,x.Del,x.OOR,x.Und,x.Rej);
+ });
+ sortTable();
+}
+
+function resetDay(){
+ if(confirm("Start new day?")){
+  document.querySelector("tbody").innerHTML="";
+  dateInput.value="";
+ }
+}
+
+function exportExcel(){
+ const rows=[...document.querySelectorAll("tbody tr")].map(r=>({
+  "DA Name":r.cells[0].children[0].value,
+  "Total OFD":r.cells[1].children[0].value,
+  "Delivered":r.cells[2].children[0].value,
+  "OOR":r.cells[3].children[0].value,
+  "Undeliverable":r.cells[4].children[0].value,
+  "Rejected":r.cells[5].children[0].value,
+  "Delivery %":r.cells[6].innerText
+ }));
+ const ws=XLSX.utils.json_to_sheet(rows);
+ const wb=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(wb,ws,"DA Performance");
+ XLSX.writeFile(wb,"DA_Performance.xlsx");
+}
+</script>
+
+</body>
+</html>
